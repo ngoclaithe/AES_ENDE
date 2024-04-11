@@ -1,55 +1,46 @@
 import os
 import tkinter as tk
 from tkinter import filedialog, messagebox
-import aes128
+from aes import AES
 import socket
+def genkey(key_length):
+    if key_length == 128:
+        bit = 128
+    elif key_length == 192:
+        bit = 192
+    elif key_length == 256:
+        bit = 256
+    else:
+        raise ValueError("Invalid key length. Use only 128, 192, or 256.")
 
+    key = os.urandom(bit// 8)
+    return key
 def encrypt_file():
     input_path = input_path_var.get()
-    key = key_var.get()
+    key_length = key_var.get()
     server_ip = ip_var.get()
     server_port = int(port_var.get())
 
     if not os.path.isfile(input_path):
         messagebox.showerror("Error", "The specified file does not exist.")
         return
+    key = genkey(key_length)
+    key_hex = key.hex()
+    aes_instance = AES()
 
-    if len(key) > 16:
-        messagebox.showerror("Error", "The key must be less than 16 characters.")
-        return
 
-    for symbol in key:
-        if ord(symbol) > 0xff or not symbol.isalnum():
-            messagebox.showerror("Error", "Invalid key. Use only Latin alphabet and numbers.")
-            return
+    with open("key.txt", "w") as key_file:
+        key_hex = '0x' + key.hex()
+        key_file.write(key_hex)
+
 
     with open(input_path, 'rb') as f:
         data = f.read()
-
-        crypted_data = []
-        temp = []
-        for byte in data:
-            temp.append(byte)
-            if len(temp) == 16:
-                crypted_part = aes128.encrypt(temp, key)
-                crypted_data.extend(crypted_part)
-                del temp[:]
-        else:
-            #padding v1
-            # crypted_data.extend(temp)
-
-            # padding v2
-            if 0 < len(temp) < 16:
-                empty_spaces = 16 - len(temp)
-                for i in range(empty_spaces - 1):
-                    temp.append(0)
-                temp.append(1)
-                crypted_part = aes128.encrypt(temp, key)
-                crypted_data.extend(crypted_part)
+        encrypted_data = aes_instance.encrypt(data, key)
 
     out_path = os.path.join(os.path.dirname(input_path), 'crypted_' + os.path.basename(input_path))
     with open(out_path, 'xb') as ff:
-        ff.write(bytes(crypted_data))
+        ff.write(bytes(encrypted_data))
 
     send_to_server(out_path, server_ip, server_port)
 
@@ -83,11 +74,11 @@ entry_file.grid(row=0, column=1, columnspan=2, sticky='w')
 button_select_file = tk.Button(root, text="Browse", command=select_file)
 button_select_file.grid(row=0, column=3)
 
-label_key = tk.Label(root, text="Enter Key (less than 16 characters):")
+label_key = tk.Label(root, text="Enter key bit (128 or 192 or 256):")
 label_key.grid(row=1, column=0, sticky='w')
 
-key_var = tk.StringVar()
-entry_key = tk.Entry(root, textvariable=key_var, show='*')
+key_var = tk.IntVar()  
+entry_key = tk.Entry(root, textvariable=key_var, show=None) 
 entry_key.grid(row=1, column=1, columnspan=2, sticky='w')
 
 label_ip = tk.Label(root, text="Enter Server IP:")
